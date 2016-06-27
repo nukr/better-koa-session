@@ -1,71 +1,70 @@
-import jwt from 'jsonwebtoken'
 import debug from 'debug'
+import uid from 'uid-safe'
 
 const log = debug('koa-session3:index.js')
+const ONEDAY = 60 * 60 * 24 * 100
 
-const defaultCookie = {
-  httpOnly: false,
+const default_cookie = {
+  httpOnly: true,
   path: '/',
   overwrite: true,
   signed: false,
   secure: false,
-  maxAge: 24 * 60 * 60 * 1000
+  maxAge: ONEDAY
 }
 
-function generateToken (session, cert) {
-  return new Promise((resolve, reject) => {
-    jwt.sign(
-      { session },
-      cert,
-      { algorithm: 'HS512' },
-      (err, token) => {
-        if (err) return reject(token)
-        resolve(token)
-      }
-    )
-  })
-}
+// TODO: memory_store ttl
+let memory_store = {
+  async get (key) {
+    return this[key]
+  },
 
-export default ({ store, secret }) => {
-  log('constructing middleware')
-  const memorystore = Symbol()
+  async setex (key, expire, value) {
+    this[key] = value
+  },
 
-  if (!store) {
-    global[memorystore] = global[memorystore] || {}
-    store = {
-      get (token) {
-        return global[memorystore][token]
-      },
-
-      set (token, expire, value) {
-        global[memorystore][token] = value
-      },
-
-      options: {
-        ttl: 60 * 60 * 24
-      }
-    }
+  async del (key) {
+    delete this[key]
   }
+}
 
-  if (!secret) throw new Error('secret is required')
+export default ({
+  store = memory_store,
+  cookie_key = 'koa.sid',
+  cookie_options = {},
+  session_id_length = 18,
+  session_id_generator = uid.bind(null, session_id_length),
+  ttl = ONEDAY
+} = {}) => {
+  log('constructing middleware')
+
   return async function (context, next) {
-    let token = context.cookies.get('koa.sid')
-    let isAuth = token && await store.get(token)
+    context._session_id = context.cookies.get(cookie_key)
+    if (context._session_id) {
+      context.session = await store.get(context._session_id)
+      if (!context.session) {
+        context._session_id = await session_id_generator()
+        context.session = {}
+      } else {
+        context.session = JSON.parse(context.session)
+      }
+    } else {
+      context._session_id = await session_id_generator()
+      context.session = {}
+    }
 
-    isAuth
-      ? context.session = jwt.decode(token).session
-      : context.session = { authenticated: false }
-
-    log('session in ', JSON.stringify(context.session, null, 2))
+    log('session in ', JSON.stringify(await context.session, null, 2))
 
     await next()
 
-    // FIXME: May be not need to sign token everytime
-    // compare with previous version
-    token = await generateToken(context.session, secret)
-    await store.set(token, store.options.ttl, true)
-    context.cookies.set('koa.sid', token, Object.assign({}, defaultCookie))
-    log('session out', JSON.stringify(context.session, null, 2))
+    if (context.session === null) {
+      store.del(context._session_id)
+      context.cookies.set(cookie_key, null)
+    } else {
+      store.setex(context._session_id, ONEDAY, JSON.stringify(context.session))
+      context.cookies.set(cookie_key, context._session_id, Object.assign(cookie_options, default_cookie))
+    }
+    log('session out', JSON.stringify(await context.session, null, 2))
   }
 }
 
