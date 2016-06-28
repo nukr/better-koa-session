@@ -4,9 +4,24 @@ import Redis from 'ioredis'
 
 const app = new Koa()
 
-let store = new Redis()
+let redis = new Redis()
 
-app.use(session({store}))
+const redis_store = {
+  async get (key) {
+    const value = await redis.get(key)
+    return value ? JSON.parse(value) : value
+  },
+
+  setex (key, expire, value) {
+    return redis.setex(key, expire, JSON.stringify(value))
+  },
+
+  del (key) {
+    return redis.del(key)
+  }
+}
+
+app.use(session({redis_store}))
 app.use(async (context, next) => {
   if (!context.session.aa) context.session.aa = 0
   context.session.aa = context.session.aa + 1

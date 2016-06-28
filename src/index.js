@@ -29,6 +29,7 @@ let memory_store = {
 }
 
 export default ({
+  // params and default values
   store = memory_store,
   cookie_key = 'koa.sid',
   cookie_options = {},
@@ -36,19 +37,14 @@ export default ({
   session_id_generator = uid.bind(null, session_id_length),
   ttl = ONEDAY
 } = {}) => {
-  log('constructing middleware')
-
   return async function (context, next) {
     context._session_id = context.cookies.get(cookie_key)
+
     if (context._session_id) {
       context.session = await store.get(context._session_id)
-      if (!context.session) {
-        context._session_id = await session_id_generator()
-        context.session = {}
-      } else {
-        context.session = JSON.parse(context.session)
-      }
-    } else {
+    }
+
+    if (!context.session) {
       context._session_id = await session_id_generator()
       context.session = {}
     }
@@ -61,7 +57,7 @@ export default ({
       store.del(context._session_id)
       context.cookies.set(cookie_key, null)
     } else {
-      store.setex(context._session_id, ONEDAY, JSON.stringify(context.session))
+      store.setex(context._session_id, ttl, context.session)
       context.cookies.set(cookie_key, context._session_id, Object.assign(cookie_options, default_cookie))
     }
     log('session out', JSON.stringify(await context.session, null, 2))
