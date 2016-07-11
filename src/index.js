@@ -53,8 +53,10 @@ export default ({
 
     await next()
 
+    log('session back', JSON.stringify(await context.session, null, 2))
     if (context.session === null) {
-      store.del(context._session_id)
+      log('delete session')
+      await store.del(context._session_id)
       context.cookies.set(cookie_key, null)
     } else {
       store.setex(context._session_id, ttl, context.session)

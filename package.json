@@ -1,6 +1,6 @@
 {
-  "name": "koa-session3",
-  "version": "1.0.5",
+  "name": "better-koa-session",
+  "version": "1.0.7",
   "description": "session middleware for koa",
   "main": "index.js",
   "scripts": {

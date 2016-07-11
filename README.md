@@ -1,4 +1,4 @@
-# koa-session3
+# better-koa-session
 
 simple session for koa support store that following redis api
 
@@ -20,11 +20,11 @@ const redis_store = {
     const value = await redis.get(key)
     return value ? JSON.parse(value) : value
   },
-  
+
   setex (key, expire, value) {
     return redis.setex(key, expire, JSON.stringify(value))
   },
-  
+
   del (key) {
     return redis.del(key)
   }
